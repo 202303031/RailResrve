@@ -1,0 +1,53 @@
+# RailReserve full stack: PostgreSQL + Spring Boot backend + nginx-served React frontend.
+# `docker compose up --build` starts everything; the frontend is then on http://localhost:5173.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: railreserve-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-railreserve}
+      POSTGRES_USER: ${POSTGRES_USER:-railreserve}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-railreserve}
+    ports:
+      # Host 5433 by default (5432 is often already in use); inside the network it stays 5432.
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - railreserve-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-railreserve} -d ${POSTGRES_DB:-railreserve}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    container_name: railreserve-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-railreserve}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-railreserve}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-railreserve}
+      # Seed demo data so search returns trains out of the box.
+      RAILRESERVE_SEED_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:-railreserve-development-signing-secret-change-me-please-32b+}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: railreserve-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    restart: unless-stopped
+
+volumes:
+  railreserve-pgdata:

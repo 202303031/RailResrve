@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save runner time.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Backend: compile -> fast unit tests -> integration tests (real Postgres via Testcontainers)
+  #    + JaCoCo coverage gate, and assemble the boot jar.
+  backend:
+    name: Backend build & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile
+        run: ./gradlew --no-daemon classes testClasses
+
+      - name: Unit tests (no containers)
+        run: >
+          ./gradlew --no-daemon test
+          --tests "com.railreserve.booking.service.ConfirmSagaUnitTest"
+          --tests "com.railreserve.booking.service.FareCalculatorTest"
+          --tests "com.railreserve.booking.service.PnrGeneratorTest"
+          --tests "com.railreserve.booking.domain.BookingStateMachineTest"
+          --tests "com.railreserve.booking.refund.TieredRefundPolicyTest"
+          --tests "com.railreserve.common.web.CorrelationIdFilterTest"
+
+      - name: Integration tests + coverage gate + assemble jar
+        # `build` runs the full suite (Testcontainers spins up PostgreSQL — Docker is available on the
+        # runner), enforces the JaCoCo 80% gate, and produces the boot jar.
+        run: ./gradlew --no-daemon build
+
+      - name: Upload test & coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-reports
+          path: |
+            backend/build/reports/tests/test
+            backend/build/reports/jacoco/test
+          if-no-files-found: ignore
+
+  # 2. Frontend: type-check + bundle, then the Vitest suite.
+  frontend:
+    name: Frontend build & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (type-check + bundle)
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+  # 3. Only after both test suites pass: validate the production Docker images build.
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          tags: railreserve-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          tags: railreserve-frontend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: RailReserve
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/railreserve}
+    username: ${SPRING_DATASOURCE_USERNAME:railreserve}
+    password: ${SPRING_DATASOURCE_PASSWORD:railreserve}
+
+  jpa:
+    hibernate:
+      # Hibernate is only allowed to VALIDATE the schema, never to change it.
+      # All schema changes go through Flyway migrations (the source of truth).
+      ddl-auto: validate
+    # Do not keep a DB connection open during view rendering; it can exhaust the pool.
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+logging:
+  structured:
+    format:
+      # Set to `ecs` (or `logstash`) to emit structured JSON logs — every line then carries the MDC
+      # correlationId. Left empty for human-readable console logs in local development.
+      console: ${LOG_STRUCTURED_FORMAT:}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+info:
+  app:
+    name: RailReserve
+    description: Train seat booking platform (portfolio project)
+    java-version: 21
+    spring-boot-version: 4.1.0
+
+# Application-specific settings
+railreserve:
+  seed:
+    # Generate demo data on startup. Off by default (and in tests); the docker profile turns it on.
+    enabled: true
+  jwt:
+    # HS256 signing secret. MUST be >= 32 bytes. Override in real deployments.
+    secret: ${JWT_SECRET:railreserve-development-signing-secret-change-me-please-32b+}
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:900}
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:1209600}
+  payment:
+    currency: INR
+    gateway:
+      # The external payment provider. Defaults to this app's own co-located mock service so a
+      # local/Docker run works end to end; point it at a real PSP in production.
+      base-url: ${PAYMENT_GATEWAY_URL:http://localhost:8080/mock-gateway}
+      connect-timeout-ms: ${PAYMENT_GATEWAY_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${PAYMENT_GATEWAY_READ_TIMEOUT_MS:4000}
+    mock-gateway:
+      # Expose the co-located mock PSP endpoints. Turn off when pointing at a real provider.
+      enabled: ${PAYMENT_MOCK_GATEWAY_ENABLED:true}

@@ -1,0 +1,31 @@
+# --- Environment / secrets ---
+.env
+*.local.env
+!.env.example
+
+# --- Java / Gradle ---
+**/build/
+**/.gradle/
+**/out/
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# --- Node / Frontend ---
+**/node_modules/
+**/dist/
+**/.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
