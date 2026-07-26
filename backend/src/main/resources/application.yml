@@ -61,6 +61,8 @@ railreserve:
   seed:
     # Generate demo data on startup. Off by default (and in tests); the docker profile turns it on.
     enabled: true
+  cors:
+    allowed-origins: ${RAILRESERVE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   jwt:
     # HS256 signing secret. MUST be >= 32 bytes. Override in real deployments.
     secret: ${JWT_SECRET:railreserve-development-signing-secret-change-me-please-32b+}
